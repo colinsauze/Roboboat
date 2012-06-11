@@ -1,5 +1,6 @@
 package uk.ac.aber.dcs.roboboat;
 
+import android.os.Handler;
 import ioio.lib.api.AnalogInput;
 import ioio.lib.api.DigitalInput;
 import ioio.lib.api.DigitalOutput;
@@ -18,7 +19,7 @@ public class BoatControl extends BaseIOIOLooper {
 	
 	public PwmOutput SERVO_RUDDER;
 	public PwmOutput SERVO_SAIL;
-	public static final int WIND_SENSOR = 47;
+	public static final int WIND_SENSOR = 45;
 	public static final Spec.Mode SPEC_MODE = Spec.Mode.NORMAL;
 	
 	/* Wind sensor PWM ranges (relative to sensor not world) */
@@ -34,7 +35,12 @@ public class BoatControl extends BaseIOIOLooper {
 	private int servo_rudder_angle;
 	private AnalogInput windPulse;
 	private int[] angles;
+	int rudderPos=1000;
+	int sailPos=1000;
+	
+	
 	private double windCalibrated = 0;
+	Handler handler = new Handler();
 
 	BoatControl(ControlActivity c) {
 		super();
@@ -56,9 +62,9 @@ public class BoatControl extends BaseIOIOLooper {
 		led = ioio_.openDigitalOutput(0, false);
 
 		SERVO_SAIL =
-			ioio_.openPwmOutput(new Spec(1, SPEC_MODE), 50);
+			ioio_.openPwmOutput(new Spec(6, SPEC_MODE), 50);
 		SERVO_RUDDER =
-			ioio_.openPwmOutput(new Spec(2, SPEC_MODE), 50);
+			ioio_.openPwmOutput(new Spec(7, SPEC_MODE), 50);
 		
 		windPulse = ioio_.openAnalogInput(WIND_SENSOR);
 		//windPulse = ioio_.openDigitalInput(WIND_SENSOR);
@@ -83,8 +89,23 @@ public class BoatControl extends BaseIOIOLooper {
 		//SERVO_SAIL.setPulseWidth(servo_sail_angle);
 		//SERVO_RUDDER.setPulseWidth(servo_rudder_angle);
 		//windDirection = windPulse.getDuration();
+		Thread.sleep(1000);
+
 		windDirection = readWindSensor();
-		log("Wind dir = " + windDirection + "lat = " + context.getSensors().getLat() + "lon=" + context.getSensors().getLon() + "hdg=" + context.getSensors().getAzimuth()); 
+		log("Wind dir = " + windDirection + "hdg=" + context.getSensors().getAzimuth());
+		//+ "lat = " + context.getSensors().getLat() + "lon=" + context.getSensors().getLon() + 
+		setServoAngleRaw(SERVO_RUDDER,rudderPos);
+		setServoAngleRaw(SERVO_SAIL,sailPos);
+		rudderPos+=50;
+		sailPos+=50;
+		if(rudderPos>2000)
+		{
+			rudderPos=1000;
+		}
+		if(sailPos>2000)
+		{
+			sailPos=1000;
+		}
 	}
 
 	@Override
