@@ -25,14 +25,20 @@ implements OnSeekBarChangeListener {
 	private CameraThread cameraThread;
 	private Handler handler = new Handler();
 	private String status = "";
+	private SeekBar rudderSeek;
+	private SeekBar sailSeek;
 	
     /** Called when the activity is first created. */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
-        ((SeekBar)findViewById(R.id.sailDirection))
-        	.setOnSeekBarChangeListener(this);
+        rudderSeek = ((SeekBar)findViewById(R.id.sailDirection));
+        rudderSeek.setOnSeekBarChangeListener(this);
+
+        sailSeek = ((SeekBar)findViewById(R.id.rudderDirection));
+        sailSeek.setOnSeekBarChangeListener(this);
+
         phoneSensors = new PhoneSensors(this.getApplicationContext());
         httpServer = HTTPServer.getInstance();
         httpServer.context = this;
@@ -115,13 +121,25 @@ implements OnSeekBarChangeListener {
     		}
     	}
     }
+    
+    public PhoneSensors getSensors()
+    {
+    	return phoneSensors;
+    }
 
 	@Override
 	public void onProgressChanged(SeekBar seekBar, int progress,
 			boolean fromUser) {
 		progress -= 90;
 		if(controller != null) {
-			controller.setServoAngle(controller.SERVO_SAIL, progress);
+			if(seekBar==sailSeek)
+			{
+				controller.setServoAngle(controller.SERVO_SAIL, progress);
+			}
+			else if(seekBar==rudderSeek)
+			{
+				controller.setServoAngle(controller.SERVO_RUDDER, progress);
+			}
 		}
 		
 	}

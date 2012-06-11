@@ -1,5 +1,6 @@
 package uk.ac.aber.dcs.roboboat;
 
+import ioio.lib.api.AnalogInput;
 import ioio.lib.api.DigitalInput;
 import ioio.lib.api.DigitalOutput;
 import ioio.lib.api.DigitalOutput.Spec;
@@ -17,7 +18,7 @@ public class BoatControl extends BaseIOIOLooper {
 	
 	public PwmOutput SERVO_RUDDER;
 	public PwmOutput SERVO_SAIL;
-	public static final int WIND_SENSOR = 6;
+	public static final int WIND_SENSOR = 47;
 	public static final Spec.Mode SPEC_MODE = Spec.Mode.NORMAL;
 	
 	/* Wind sensor PWM ranges (relative to sensor not world) */
@@ -31,7 +32,7 @@ public class BoatControl extends BaseIOIOLooper {
 	private double windDirection = 0;
 	private int servo_sail_angle;
 	private int servo_rudder_angle;
-	private PulseInput windPulse;
+	private AnalogInput windPulse;
 	private int[] angles;
 	private double windCalibrated = 0;
 
@@ -55,11 +56,11 @@ public class BoatControl extends BaseIOIOLooper {
 		led = ioio_.openDigitalOutput(0, false);
 
 		SERVO_SAIL =
-			ioio_.openPwmOutput(new Spec(7, SPEC_MODE), 50);
+			ioio_.openPwmOutput(new Spec(1, SPEC_MODE), 50);
 		SERVO_RUDDER =
-			ioio_.openPwmOutput(new Spec(10, SPEC_MODE), 50);
+			ioio_.openPwmOutput(new Spec(2, SPEC_MODE), 50);
 		
-		windPulse = ioio_.openPulseInput(WIND_SENSOR, PulseMode.NEGATIVE);
+		windPulse = ioio_.openAnalogInput(WIND_SENSOR);
 		//windPulse = ioio_.openDigitalInput(WIND_SENSOR);
 		//windCalibrated = calibrateWindSensor();
 		
@@ -83,6 +84,7 @@ public class BoatControl extends BaseIOIOLooper {
 		//SERVO_RUDDER.setPulseWidth(servo_rudder_angle);
 		//windDirection = windPulse.getDuration();
 		windDirection = readWindSensor();
+		log("Wind dir = " + windDirection + "lat = " + context.getSensors().getLat() + "lon=" + context.getSensors().getLon() + "hdg=" + context.getSensors().getAzimuth()); 
 	}
 
 	@Override
@@ -187,7 +189,7 @@ public class BoatControl extends BaseIOIOLooper {
 	public double readWindSensor() {
 		//return (readWindSensorRaw()+windCalibrated) % 360;
 		try{
-			return windPulse.getDuration();
+			return windPulse.read();
 		} catch(Exception e) {
 			return 0.0;
 		}

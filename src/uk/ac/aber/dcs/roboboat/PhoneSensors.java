@@ -93,6 +93,29 @@ implements SensorEventListener, LocationListener {
 		context.registerReceiver(this, batteryFilter);
 	}
 
+	public double getLat()
+	{
+		return location.getLatitude();
+	}
+	
+	public double getLon()
+	{
+		return location.getLongitude();
+	}
+	
+	public float getAzimuth()
+	{
+		return apr[0];
+	}
+	
+	public float getSpeed()
+	{
+		return location.getSpeed();
+	}
+	
+	
+	
+	
 	@Override
 	public void onSensorChanged(SensorEvent event) {
 		float[] inR = new float[16];
