@@ -39,11 +39,137 @@ public class BoatControl extends BaseIOIOLooper {
 	private WaypointManager wm = new WaypointManager(state);
 	int rudderPos=1000;
 	int sailPos=1000;
-	
-	
+	int PORT_TACK,STBD_TACK;
+	float running_err;
+	float pgain=(float)0.1;
+	float igain=(float)0.01;
 	
 	private double windCalibrated = 0;
 	Handler handler = new Handler();
+	
+	
+	//calculates difference between two headings taking wrap around into account
+	int get_hdg_diff(int heading1,int heading2)
+	{
+	    int result;
+
+	    result = heading1-heading2;
+
+	    if(result<-180)
+	    {
+	        result = 360 + result;
+	        return result;
+	    } 
+	    
+	    if(result>180)
+	    {
+	        result = 0 - (360-result);
+	    }
+
+	    return result;
+	}
+
+	/*
+	works out if we should be tacking or not
+	returns a new heading that reflects this
+	*/
+	int check_tacking(int relwind,int heading,int des_hdg)
+	{
+	        int truewind,tempwpthdg,temptruewind;
+	        int HOW_CLOSE=45;
+
+	        truewind = relwind + heading;       // Calculate true wind direction
+	        if (truewind > 360) truewind -= 360;
+	        //handle tacking
+	        //handle when differenve over 180
+	        if((Math.abs(truewind-des_hdg))>180)
+	        {
+	            if((360-(Math.abs(truewind-des_hdg)))<HOW_CLOSE)
+	            {
+	                state.setSailable(false);
+	            }
+	            else
+	            {
+	                state.setSailable(true);
+	            }
+	        }
+	        //when difference less than 180
+	        else if (Math.abs(truewind-des_hdg) < HOW_CLOSE)    // Only try to sail to within 55 degrees of the wind
+	        {
+	            state.setSailable(false);
+	        }
+	        else
+	        {
+	            state.setSailable(true);
+	            PORT_TACK = 0;
+	            STBD_TACK = 0;
+	        }
+
+	        //why not just if !sailable??
+	        if ((state.isSailable() == false) && (PORT_TACK ==0) && (STBD_TACK == 0)) // If we can't lay the course to the waypoint then...
+	        {
+	            temptruewind = truewind;
+	            tempwpthdg = des_hdg;
+	            if (des_hdg < HOW_CLOSE)
+	            {
+	                tempwpthdg += 180;
+	                temptruewind += 180;
+	                if (temptruewind > 360)
+	                {
+	                    temptruewind -= 360;
+	                }
+	            }
+	            if (des_hdg > (360 - HOW_CLOSE))
+	            {
+	                tempwpthdg -= 180;
+	                temptruewind -= 180;
+	                if (temptruewind < 0)
+	                {
+	                    temptruewind += 360;
+	                }
+	            }
+	            if (tempwpthdg > temptruewind)
+	            {
+	                //des_hdg = truewind + 55; // Sail 55 degrees off the wind on the relevant tack 
+	                PORT_TACK = 1;          // Set flag to stop boat "short tacking" to waypoint
+	            }
+	            else 
+	            {
+	                //des_hdg = truewind - 55; // to get as close as possible
+	                STBD_TACK = 1;          // Set flag to stop boat "short tacking" to waypoint
+	            }
+	            //printf("Tgt hdg adj to: %f\n",target_hdg);
+
+	        } // otherwise just sail directly to the waypoint
+
+	        if (state.isSailable() == false )
+	        {
+	             // Keep boat hard on wind on same tack until we can lay course for waypoint (enforce single tack)
+	            if (PORT_TACK == 1) 
+	            {
+	                des_hdg = truewind + HOW_CLOSE; // Sail 55 degrees off the wind on port tack 
+	            }
+
+	            if (STBD_TACK == 1) 
+	            {
+	                des_hdg = truewind - HOW_CLOSE; // Sail 55 degrees off the wind on stbd tack 
+	            }
+	        }
+
+	        if (des_hdg > 359)
+	        {
+	            des_hdg -= 360;
+	        }
+
+	        if (des_hdg < 0)
+	        {
+	            des_hdg += 360;
+	        }
+
+	    return des_hdg;
+	}
+
+	
 
 	BoatControl(ControlActivity c) {
 		super();
@@ -89,6 +215,8 @@ public class BoatControl extends BaseIOIOLooper {
 
 	@Override
 	public void loop() throws ConnectionLostException, InterruptedException {
+		int new_sail_pos;
+		int new_rudder_pos;
 		led_ = !led_;
 		led.write(led_);
 		
@@ -102,8 +230,86 @@ public class BoatControl extends BaseIOIOLooper {
 		state.setWindDir((int)windDirection);
 		wm.waypointCheck(context.getSensors());
 		log("Wind dir = " + windDirection + "hdg=" + context.getSensors().getAzimuth());
-		//+ "lat = " + context.getSensors().getLat() + "lon=" + context.getSensors().getLon() + 
+		//+ "lat = " + context.getSensors().getLat() + "lon=" + context.getSensors().getLon() +
+		
+		
+		//********* rudder pi controller
+		int target_hdg = check_tacking(state.getRelwind(),state.getHeading(),state.getDesiredHeading());
+		
+        float error = (float) get_hdg_diff(state.getHeading(),target_hdg);
+//int force_jibe(int des_hdg,int heading,int relwind)
+
+        //error = (float) force_jibe((int)target_hdg,(int)hdg,(int)relwind);
+        if (error>180.0)
+        {
+            error=(float)180.0;
+        }
+        else if(error<-180.0)
+        {
+            error=(float)-180.0;
+        }
+        
+        running_err = running_err + error;
+        if (Math.abs(running_err) > 4000) running_err = 4000; // limit integral component
+        running_err = running_err * (float)0.9;
+
+		
+        new_rudder_pos = (int)((error * pgain) + (running_err * igain));
+
+        //rudderPos=new_rudder_pos*1;
+		
 		setServoAngleRaw(SERVO_RUDDER,rudderPos);
+		
+		
+            if(state.getRelwind() >= 0 && state.getRelwind() < 15) // in irons, help us tack?
+            {
+                new_sail_pos = 0;
+            }
+            else if (state.getRelwind() >= 15 && state.getRelwind() < 50) //close hauled
+            {
+                new_sail_pos = 1;
+            }
+            else if (state.getRelwind() >= 50 && state.getRelwind() < 80) //close reach
+            {
+                new_sail_pos = 2;
+            }
+            else if (state.getRelwind() >= 80 && state.getRelwind() < 120) //beam reach
+            {
+                new_sail_pos = 3;
+            }
+            else if (state.getRelwind() >= 120 && state.getRelwind() < 145) //broad reach
+            {
+                new_sail_pos = 4;
+            }
+            else if (state.getRelwind() < 215) //run
+            {
+                new_sail_pos = 5;
+            }
+            else if (state.getRelwind() >= 215 && state.getRelwind() < 240) //broad reach
+            {
+                new_sail_pos = 4;
+            }
+            else if (state.getRelwind() >= 240 && state.getRelwind() < 280) //beam reach
+            {
+                new_sail_pos = 3;
+            }
+            else if (state.getRelwind() >= 280 && state.getRelwind() < 310) //close hauled
+            {
+                new_sail_pos = 2;
+            }
+            else if (state.getRelwind() <= 345)
+	        {
+                new_sail_pos = 1;
+	        }
+            else
+            {
+                new_sail_pos = 0;
+            }
+
+			
+			//sailPos = new_sail_pos * 1;
+			
+			
 		setServoAngleRaw(SERVO_SAIL,sailPos);
 		rudderPos+=50;
 		sailPos+=50;

@@ -22,6 +22,7 @@ public class BoatState {
 	int truewind;
 	int relwind;
 	boolean autonomous;
+	boolean sailable;
 	
 	final static double WIND_DECAY_RATE=250.0;
 	
@@ -164,6 +165,22 @@ public class BoatState {
 
 	public int getRelwind() {
 		return relwind;
+	}
+
+	public boolean isAutonomous() {
+		return autonomous;
+	}
+
+	public void setAutonomous(boolean autonomous) {
+		this.autonomous = autonomous;
+	}
+
+	public boolean isSailable() {
+		return sailable;
+	}
+
+	public void setSailable(boolean sailable) {
+		this.sailable = sailable;
 	}
 
 	
