@@ -35,8 +35,11 @@ public class BoatControl extends BaseIOIOLooper {
 	private int servo_rudder_angle;
 	private AnalogInput windPulse;
 	private int[] angles;
+	private BoatState state = new BoatState();
+	private WaypointManager wm = new WaypointManager(state);
 	int rudderPos=1000;
 	int sailPos=1000;
+	
 	
 	
 	private double windCalibrated = 0;
@@ -49,6 +52,8 @@ public class BoatControl extends BaseIOIOLooper {
 		servos = new PwmOutput[2];
 		angles = new int[2];
 		angles[0] = 1500; angles[1] = 1500;
+		
+		
 	}
 	
 	BoatControl() {
@@ -65,6 +70,7 @@ public class BoatControl extends BaseIOIOLooper {
 			ioio_.openPwmOutput(new Spec(6, SPEC_MODE), 50);
 		SERVO_RUDDER =
 			ioio_.openPwmOutput(new Spec(7, SPEC_MODE), 50);
+	
 		
 		windPulse = ioio_.openAnalogInput(WIND_SENSOR);
 		//windPulse = ioio_.openDigitalInput(WIND_SENSOR);
@@ -92,6 +98,9 @@ public class BoatControl extends BaseIOIOLooper {
 		Thread.sleep(1000);
 
 		windDirection = readWindSensor();
+		//convert windDirection here
+		state.setWindDir((int)windDirection);
+		wm.waypointCheck(context.getSensors());
 		log("Wind dir = " + windDirection + "hdg=" + context.getSensors().getAzimuth());
 		//+ "lat = " + context.getSensors().getLat() + "lon=" + context.getSensors().getLon() + 
 		setServoAngleRaw(SERVO_RUDDER,rudderPos);
