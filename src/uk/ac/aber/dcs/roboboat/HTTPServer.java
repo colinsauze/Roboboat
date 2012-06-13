@@ -17,7 +17,7 @@ public class HTTPServer extends Thread {
 	public final static String infoPage =
 			"<b>TODO: Implement this.</b>";
 	
-	public ControlActivity context;
+	public BoatControl context;
 	private Socket clientSocket;
 	private ServerSocket serverSocket;
 	private BufferedReader input;
@@ -65,7 +65,8 @@ public class HTTPServer extends Thread {
 				} else if(header.equals("GET /camera HTTP/1.1")) {
 					if(camera != null) send("image/jpeg",camera);
 					else send("image/jpeg","");
-				} else if(header.startsWith("GET /steer/sail/", 0)) {
+				} 
+				/*else if(header.startsWith("GET /steer/sail/", 0)) {
 					String[] split = header.split(" ")[1].split("/");
 					for(int i=0; i<split.length; i++) {
 						if(split.length == 4 &&
@@ -79,7 +80,7 @@ public class HTTPServer extends Thread {
 							send("text/plain", "ERROR");
 						}
 					}
-				}
+				}*/
 				closeInputOutput();
 			}
 		} catch(Exception e) {
@@ -159,7 +160,7 @@ public class HTTPServer extends Thread {
 	 * @param msg Message to log
 	 */
 	public void log(final String msg) {
-		final ControlActivity c = this.context;
+		final BoatControl c = this.context;
 		if(c == null) return;
 		c.runOnUiThread(new Runnable() {
 			@Override
