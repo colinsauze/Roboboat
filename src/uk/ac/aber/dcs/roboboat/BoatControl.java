@@ -1,6 +1,14 @@
 package uk.ac.aber.dcs.roboboat;
 
 import android.content.Context;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.location.Criteria;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.widget.SeekBar;
@@ -18,45 +26,148 @@ import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
 import ioio.lib.util.android.IOIOActivity;
 
-public class BoatControl extends IOIOActivity {
+public class BoatControl extends IOIOActivity implements SensorEventListener,  LocationListener {
 
 	private TextView textView_;
+	private TextView headingText_;
 	private SeekBar sailSeekBar_;
 	private SeekBar rudderSeekBar_;
 	public Context context;
+	private LocationManager gps;
+	private String gpsProvider;
+	private BoatState state = new BoatState();
+	private float[] gravity = new float[3];
+	private float[] geomag = new float[3];
+
+	//public PhoneSensors phoneSensors;
+
+	SensorManager m_sensorManager;
+	
+	private void registerListeners() {
+		m_sensorManager.registerListener(this,
+				m_sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD),
+				SensorManager.SENSOR_DELAY_FASTEST);
+		m_sensorManager.registerListener(this,
+				m_sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+				SensorManager.SENSOR_DELAY_FASTEST);
+		m_sensorManager.registerListener(this,
+				m_sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+				SensorManager.SENSOR_DELAY_FASTEST);
+		
+		gps = (LocationManager)this.getBaseContext().getSystemService(Context.LOCATION_SERVICE);
+		Criteria criteria = new Criteria();
+		criteria.setAccuracy(Criteria.ACCURACY_FINE);
+		gpsProvider = gps.getBestProvider(criteria, true);
+		gps.requestLocationUpdates(gpsProvider, 1000, 0, this);
+		Location location = gps.getLastKnownLocation(gpsProvider);
+		if(location!=null)
+		{
+			double lat = location.getLatitude(); 
+			state.setLat(lat);
+			state.setLon(location.getLongitude());
+			headingText_.setText((new Float(state.getLat()).toString()) + (new Float(state.getLon()).toString()));
+		}
+	}
+
+	private void unregisterListeners() {
+		m_sensorManager.unregisterListener(this);
+	}
+	
+	@Override
+	public void onLocationChanged(Location location) {
+		state.setLat(location.getLatitude());
+		state.setLon(location.getLongitude());
+		headingText_.setText((new Float(state.getLat()).toString()) + (new Float(state.getLon()).toString()));
+	}
+
+	@Override
+	public void onDestroy() {
+		unregisterListeners();
+		super.onDestroy();
+	}
+
+	@Override
+	public void onPause() {
+		unregisterListeners();
+		super.onPause();
+	}
+
+	@Override
+	public void onResume() {
+		registerListeners();
+		super.onResume();
+	}
+
+	@Override
+	public void onAccuracyChanged(Sensor sensor, int accuracy) {
+	}
+
+	@Override
+	public void onSensorChanged(SensorEvent event) {
+		float[] inR = new float[16];
+		float[] orientVals = new float[3];
+		float[] I = new float[16];
+		//float[] orientVals = new float[3];
+		float[] apr = new float[3];
+		
+		if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+			geomag = event.values.clone();
+		}
+		else if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER ) {
+			
+			gravity = event.values.clone();
+		}
+		
+		if(gravity != null && geomag != null) {
+			boolean success =
+				SensorManager.getRotationMatrix(inR, I, gravity, geomag);
+			if(success) {
+				SensorManager.getOrientation(inR, orientVals);
+				state.setHeading((int)Math.toDegrees((double)orientVals[0]));
+				
+	
+
+			}
+		}
+	}
 
 
+	
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
 
 		textView_ = (TextView) findViewById(R.id.console);
+		headingText_ = (TextView) findViewById(R.id.headingText);
+		rudderSeekBar_ = (SeekBar) findViewById(R.id.rudderDirection);
+		sailSeekBar_ = (SeekBar) findViewById(R.id.sailDirection);
+
+		m_sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+		registerListeners();
 
 		enableUi(false);
-		context = this.getBaseContext();
 	}
 
 	class Looper extends BaseIOIOLooper {
 
 		public PwmOutput SERVO_RUDDER;
 		public PwmOutput SERVO_SAIL;
-		public static final int WIND_SENSOR = 45;
+		public static final int WIND_SENSOR = 44;
 
 		/* Wind sensor PWM ranges (relative to sensor not world) */
 		public static final double ZERO_DEGREES = 3.105000068899244E-4;
 
-		public  PhoneSensors phoneSensors;
-		private  HTTPServer httpServer;
+		private HTTPServer httpServer;
 		private DigitalOutput led;
 		private boolean led_ = true;
 		private PwmOutput[] servos;
 		private int angle = 0;
 		private double windDirection = 0;
+		private double windForward;
 		private int servo_sail_angle;
 		private int servo_rudder_angle;
 		private AnalogInput windPulse;
 		private int[] angles;
-		private BoatState state = new BoatState();
 		private WaypointManager wm = new WaypointManager(state);
 		int rudderPos = 1000;
 		int sailPos = 1000;
@@ -184,17 +295,21 @@ public class BoatControl extends IOIOActivity {
 		@Override
 		public void setup() throws ConnectionLostException {
 			try {
+
 				log("IOIO Connected,  configuring");
+				log("Ensure wind sensor is facing forward");
+				Thread.sleep(500);
 				led = ioio_.openDigitalOutput(0, false);
 
 				SERVO_SAIL = ioio_.openPwmOutput(6, 50);
 				SERVO_RUDDER = ioio_.openPwmOutput(7, 50);
 
 				windPulse = ioio_.openAnalogInput(WIND_SENSOR);
+				windForward = readWindSensor();
 				// windPulse = ioio_.openDigitalInput(WIND_SENSOR);
 				// windCalibrated = calibrateWindSensor();
 
-				log("Sail Servo output on pin 10");
+				log("Sail Servo output on pin 6");
 				log("Rudder Servo output on pin 7");
 				log("Wind Sensor input on pin " + WIND_SENSOR);
 				log("-----------------------------");
@@ -203,10 +318,10 @@ public class BoatControl extends IOIOActivity {
 				log("IOIO Not configured correctly!");
 				log("Exception: " + e.getMessage());
 			}
-			phoneSensors = new PhoneSensors(context);
-			httpServer = new HTTPServer();
-			
-			
+			//phoneSensors = new PhoneSensors(context);
+
+			/* httpServer = new HTTPServer(); */
+
 		}
 
 		@Override
@@ -221,12 +336,18 @@ public class BoatControl extends IOIOActivity {
 			// windDirection = windPulse.getDuration();
 			Thread.sleep(1000);
 
-			windDirection = readWindSensor();
+			windDirection = (readWindSensor() - windForward) * 360;
+			if (windDirection < 0) {
+				windDirection = windDirection * -1;
+			}
+
 			// convert windDirection here
-			state.setWindDir((int) windDirection);
-			wm.waypointCheck(phoneSensors);
-			log("Wind dir = " + windDirection + "hdg="
-					+ phoneSensors.getAzimuth());
+			state.setWindDir(((int) windDirection) % 360);
+			log("wind = " + new Integer((int)windDirection).toString() + " hdg = " + state.getHeading() + "loc =" + state.getLat() + "," + state.getLon());
+			/*
+			 * wm.waypointCheck(phoneSensors); og("Wind dir = " + windDirection
+			 * + "hdg=" + phoneSensors.getAzimuth());
+			 */
 			// + "lat = " + context.getSensors().getLat() + "lon=" +
 			// context.getSensors().getLon() +
 
@@ -330,17 +451,12 @@ public class BoatControl extends IOIOActivity {
 		 * @param msg
 		 *            Message to log
 		 */
-		/*public void log(final String msg) {
-			final ControlActivity c = this.context;
-			if (c == null)
-				return;
-			c.runOnUiThread(new Runnable() {
-				@Override
-				public void run() {
-					c.log(msg);
-				}
-			});
-		}*/
+		/*
+		 * public void log(final String msg) { final ControlActivity c =
+		 * this.context; if (c == null) return; c.runOnUiThread(new Runnable() {
+		 * 
+		 * @Override public void run() { c.log(msg); } }); }
+		 */
 
 		public double getWindDirection() {
 			return this.windDirection;
@@ -373,7 +489,7 @@ public class BoatControl extends IOIOActivity {
 		 *            Angle (in microseconds) to turn servo to
 		 */
 		public void setServoAngleRaw(PwmOutput servo, int angle) {
-			log("Servo " + servo + ": angle = " + angle + "uS");
+			// log("Servo " + servo + ": angle = " + angle + "uS");
 			if (servo != null) {
 				/*
 				 * try { servo.setPulseWidth(angle); } catch
@@ -422,8 +538,8 @@ public class BoatControl extends IOIOActivity {
 		/*
 		 * public double calibrateWindSensor() { return readWindSensorRaw(); }
 		 */
-	} //end of inner class
-	
+	} // end of inner class
+
 	@Override
 	protected IOIOLooper createIOIOLooper() {
 		return new Looper();
@@ -440,16 +556,38 @@ public class BoatControl extends IOIOActivity {
 		});
 	}
 
-	private void setText(final String str) {
+	public void log(final String msg) {
+
 		runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
-				textView_.setText(str);
+				textView_.setText(textView_.getText() + "\n" + msg);
+				int len = textView_.getText().length();
+				if (len > 200) {
+					textView_.setText(textView_.getText().toString()
+							.substring(len - 200, len));
+				}
 			}
 		});
+
+		// TODO Auto-generated method stub
+
 	}
 
-	public void log(String msg) {
+	@Override
+	public void onProviderDisabled(String arg0) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onProviderEnabled(String provider) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onStatusChanged(String provider, int status, Bundle extras) {
 		// TODO Auto-generated method stub
 		
 	}

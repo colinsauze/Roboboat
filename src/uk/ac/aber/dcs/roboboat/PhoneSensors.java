@@ -23,12 +23,12 @@ public class PhoneSensors extends BroadcastReceiver
 implements SensorEventListener, LocationListener {
 	private final Context context;
 	private final SensorManager sensors;
-	private final Sensor orient;
+	//private final Sensor orient;
 	private final Sensor compass;
-	private final Sensor temp;
+	//private final Sensor temp;
 	private final LocationManager gps;
 	private final String gpsProvider;
-	private final IntentFilter batteryFilter;
+	//private final IntentFilter batteryFilter;
 	
 	public Location location;
 	public float[] orientation = new float[3];
@@ -72,25 +72,25 @@ implements SensorEventListener, LocationListener {
 		criteria.setAccuracy(Criteria.ACCURACY_FINE);
 		gpsProvider = gps.getBestProvider(criteria, true);
 		
-		orient =
-			sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+		/*orient =
+			sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);*/
 		compass =
 			sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-		temp =
-			sensors.getDefaultSensor(Sensor.TYPE_TEMPERATURE);
+		/*temp =
+			sensors.getDefaultSensor(Sensor.TYPE_TEMPERATURE);*/
 
 		/* Register updates for the compass (magnetometer) and accelerometer */
-		sensors.registerListener(this, orient, SensorManager.SENSOR_DELAY_FASTEST);
+		//sensors.registerListener(this, orient, SensorManager.SENSOR_DELAY_FASTEST);
 		sensors.registerListener(this, compass, SensorManager.SENSOR_DELAY_FASTEST);
-		sensors.registerListener(this, temp, SensorManager.SENSOR_DELAY_NORMAL);
+		//sensors.registerListener(this, temp, SensorManager.SENSOR_DELAY_NORMAL);
 		
 		/* Register updates for the GPS */
 		gps.requestLocationUpdates(gpsProvider, UPDATE_RATE, 0, this);
 		location = gps.getLastKnownLocation(gpsProvider);
 		
 		/* Register the intent filter for getting battery level */
-		batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-		context.registerReceiver(this, batteryFilter);
+		/*batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+		context.registerReceiver(this, batteryFilter);*/
 	}
 
 	public double getLat()
@@ -120,7 +120,7 @@ implements SensorEventListener, LocationListener {
 	public void onSensorChanged(SensorEvent event) {
 		float[] inR = new float[16];
 		float[] I = new float[16];
-		float[] orientVals = new float[3];
+		//float[] orientVals = new float[3];
 		float[] apr = new float[3];
 		
 		double azimuth = 0, pitch = 0, roll = 0;
@@ -129,20 +129,20 @@ implements SensorEventListener, LocationListener {
 		case Sensor.TYPE_MAGNETIC_FIELD:
 			geomag = event.values.clone();
 			break;
-		case Sensor.TYPE_ACCELEROMETER:
+		/*case Sensor.TYPE_ACCELEROMETER:
 			gravity = event.values.clone();
-			break;
+			break;*/
 		}
 		
 		if(gravity != null && geomag != null) {
 			boolean success =
 				SensorManager.getRotationMatrix(inR, I, gravity, geomag);
 			if(success) {
-				SensorManager.getOrientation(inR, orientVals);
+				/*SensorManager.getOrientation(inR, orientVals);
 				for(int i=0; i<3; i++) {
 					apr[i] = (float) Math.toDegrees(orientVals[i]);
 				}
-				this.orientation = orientVals;
+				this.orientation = orientVals;*/
 				this.apr = apr;
 			}
 		}
@@ -156,9 +156,9 @@ implements SensorEventListener, LocationListener {
 
 	@Override
 	public void onReceive(Context context, Intent intent) {
-		int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+		/*int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
 		int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-		battery = ((float)level/(float)scale)*100;
+		battery = ((float)level/(float)scale)*100;*/
 	}
 	
 	@Override
